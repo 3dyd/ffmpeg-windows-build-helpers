@@ -1651,22 +1651,46 @@ build_ffmpeg() {
     postpend_configure_opts="--enable-static --disable-shared --prefix=$mingw_w64_x86_64_prefix"
   fi
 
-  do_git_checkout https://github.com/FFmpeg/FFmpeg.git $output_dir $ffmpeg_git_checkout_version
+  do_git_checkout git://git.1f0.de/ffmpeg.git $output_dir $ffmpeg_git_checkout_version
   cd $output_dir
-    apply_patch file://$patch_dir/frei0r_load-shared-libraries-dynamically.diff
-
     if [ "$bits_target" = "32" ]; then
       local arch=x86
     else
       local arch=x86_64
     fi
 
-    init_options="--arch=$arch --target-os=mingw32 --cross-prefix=$cross_prefix --pkg-config=pkg-config --pkg-config-flags=--static --extra-version=ffmpeg-windows-build-helpers --enable-gray --enable-version3 --disable-debug --disable-doc --disable-htmlpages --disable-manpages --disable-podpages --disable-txtpages --disable-w32threads"
-    if [[ `uname` =~ "5.1" ]]; then
-      init_options+=" --disable-schannel"
-      # Fix WinXP incompatibility by disabling Microsoft's Secure Channel, because Windows XP doesn't support TLS 1.1 and 1.2, but with GnuTLS or OpenSSL it does. The main reason I started this journey!
-    fi
-    config_options="$init_options  --enable-libtesseract --enable-fontconfig --enable-gmp --enable-gnutls --enable-libass --enable-libbluray --enable-libbs2b --enable-libcaca --enable-libflite --enable-libfreetype --enable-libfribidi --enable-libgme --enable-libgsm --enable-libilbc --enable-libmodplug --enable-libmp3lame --enable-libmysofa --enable-libopencore-amrnb --enable-libopencore-amrwb --enable-libopenh264 --enable-libopenjpeg --enable-libopus --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libtheora --enable-libtwolame --enable-libvo-amrwbenc --enable-libvorbis --enable-libvpx --enable-libwebp --enable-libzimg --enable-libzvbi  --enable-nvenc --enable-nvdec"
+    init_options="--arch=$arch --target-os=mingw32 --cross-prefix=$cross_prefix --pkg-config=pkg-config --pkg-config-flags=--static --extra-version=ffmpeg-windows-build-helpers --enable-gray --enable-version3 --disable-debug --disable-doc --disable-htmlpages --disable-manpages --disable-podpages --disable-txtpages --disable-schannel"
+
+    config_options="$init_options  --enable-gnutls \
+    --enable-gpl                    \
+    --enable-version3               \
+    --enable-w32threads             \
+    --disable-demuxer=matroska      \
+    --disable-filters               \
+    --enable-filter=scale,yadif,w3fdif \
+    --disable-protocol=async,cache,concat,httpproxy,icecast,md5,subfile \
+    --disable-muxers                \
+    --enable-muxer=spdif            \
+    --disable-bsfs                  \
+    --enable-bsf=extract_extradata,vp9_superframe \
+    --disable-cuda                  \
+    --disable-cuvid                 \
+    --disable-nvenc                 \
+    --enable-libspeex               \
+    --enable-libopencore-amrnb      \
+    --enable-libopencore-amrwb      \
+    --enable-avresample             \
+    --enable-avisynth               \
+    --disable-avdevice              \
+    --disable-postproc              \
+    --disable-swresample            \
+    --disable-encoders              \
+    --disable-devices               \
+    --disable-programs              \
+    --disable-debug                 \
+    --disable-doc                   \
+    --build-suffix=-lav             \
+    "
     # With the changes being made to 'configure' above and with '--pkg-config-flags=--static' there's no need anymore for '--extra-cflags=' and '--extra-libs='.
     if [[ ! -f configure.bak ]]; then # Changes being made to 'configure' are done with 'sed', because 'configure' gets updated a lot.
       sed -i "/enabled libtwolame/s/&&$/-DLIBTWOLAME_STATIC \&\& add_cppflags -DLIBTWOLAME_STATIC \&\&/;/enabled libmodplug/s/.*/& -DMODPLUG_STATIC \&\& add_cppflags -DMODPLUG_STATIC/;/enabled libcaca/s/.*/& -DCACA_STATIC \&\& add_cppflags -DCACA_STATIC/" configure # Add '-Dxxx_STATIC' to LibTwoLAME, LibModplug and Libcaca. FFmpeg should change this upstream, just like they did with libopenjpeg.
@@ -1674,9 +1698,6 @@ build_ffmpeg() {
       sed -i.bak "s/ install-data//" Makefile # Binary only (don't install 'DATA_FILES' and 'EXAMPLES_FILES').
     fi
     config_options+=" --extra-cflags=-DLIBTWOLAME_STATIC --extra-cflags=-DMODPLUG_STATIC --extra-cflags=-DCACA_STATIC" # if we ever do a git pull then it nukes the changes from above, so just use these for now :|
-    if [[ $enable_gpl == 'y' ]]; then
-      config_options+=" --enable-gpl --enable-avisynth --enable-frei0r --enable-filter=frei0r --enable-librubberband --enable-libvidstab --enable-libx264 --enable-libx265 --enable-libxavs --enable-libxvid"
-    fi
     # other possibilities (you'd need to also uncomment the call to their build method):
     #   --enable-w32threads # [worse UDP than pthreads, so not using that]
     if [[ $build_amd_amf = y ]]; then
@@ -1923,6 +1944,8 @@ else
   echo "low RAM detected so using only one cpu for gcc compilation"
   gcc_cpu_count=1 # compatible low RAM...
 fi
+
+set -- --build-ffmpeg-shared=y --build-ffmpeg-static=n --ffmpeg-git-checkout-version=3ea26f5add36220fd1da5bbb073ee28050ac7f77 --build-intel-qsv=n --disable-nonfree=y --compiler-flavors=win32
 
 # variables with their defaults
 build_ffmpeg_static=y
